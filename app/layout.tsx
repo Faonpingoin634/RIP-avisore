@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Cinzel, Inter } from "next/font/google";
-import Link from "next/link";
 
+import SiteHeader from "@/components/layout/SiteHeader";
 import "./globals.css";
 
 const title = Cinzel({ variable: "--font-title", subsets: ["latin"], weight: ["600", "700"] });
@@ -21,16 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="fr" className={`${title.variable} ${body.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col font-sans">
-        <header className="border-b border-mist bg-tomb">
-          <nav
-            aria-label="Navigation principale"
-            className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3"
-          >
-            <Link href="/" className="font-display text-xl font-bold text-bone no-underline">
-              <span aria-hidden="true">🪦 </span>RIP-Advisor
-            </Link>
-          </nav>
-        </header>
+        <SiteHeader />
 
         <main className="flex flex-1 flex-col">{children}</main>
 

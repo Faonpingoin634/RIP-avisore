@@ -21,24 +21,28 @@
   --font-display: var(--font-title), Georgia, serif;
 }
 
-html {
-  color-scheme: dark;
-}
+/* In the base layer so that Tailwind utilities (e.g. `text-crypt` on a link) win. */
+@layer base {
+  html {
+    color-scheme: dark;
+  }
 
-body {
-  background-color: var(--color-crypt);
-  color: var(--color-bone);
-  font-size: 1rem;
-  line-height: 1.6;
-}
+  body {
+    background-color: var(--color-crypt);
+    color: var(--color-bone);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
 
-a {
-  color: var(--color-candle);
-}
+  a {
+    color: var(--color-candle);
+    text-underline-offset: 3px;
+  }
 
-:focus-visible {
-  outline: 3px solid var(--color-candle);
-  outline-offset: 2px;
+  :focus-visible {
+    outline: 3px solid var(--color-candle);
+    outline-offset: 2px;
+  }
 }
 
 /* ---------- Leaflet overrides ---------- */
