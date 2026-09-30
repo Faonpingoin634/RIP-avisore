@@ -79,3 +79,30 @@ a {
   background: transparent;
   border: none;
 }
+
+/* Slightly darker tiles to match the theme, labels stay readable. */
+.leaflet-tile-pane {
+  filter: brightness(0.78) saturate(0.55) contrast(1.05);
+}
+
+.leaflet-container a {
+  color: var(--color-candle);
+}
+
+.leaflet-container .marker-cluster-small,
+.leaflet-container .marker-cluster-medium,
+.leaflet-container .marker-cluster-large {
+  background-color: rgb(224 192 120 / 0.35);
+}
+
+.leaflet-container .marker-cluster-small div,
+.leaflet-container .marker-cluster-medium div,
+.leaflet-container .marker-cluster-large div {
+  background-color: var(--color-candle);
+  color: var(--color-crypt);
+  font-weight: 700;
+}
+
+.marker-cluster span {
+  font-size: 0.9375rem;
+}

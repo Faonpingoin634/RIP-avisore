@@ -143,7 +143,12 @@ export type FetchLike = (input: string, init?: RequestInit & { next?: { revalida
 export type OverpassClientOptions = {
   endpoints?: readonly string[];
   fetchImpl?: FetchLike;
+  /** Per-request timeout (20 s by default). */
   timeoutMs?: number;
+  /** Budget for the whole fallback chain; keeps us under the serverless function limit. */
+  totalBudgetMs?: number;
+  /** Delay before the single retry of the primary endpoint after a 429/504. */
+  primaryRetryDelayMs?: number;
   /** overpass-api.de answers 406 to anonymous clients: identify the app. */
   userAgent?: string;
 };
@@ -153,20 +158,33 @@ export type OverpassRequestOptions = {
   revalidate?: number;
 };
 
+const MIN_ATTEMPT_MS = 2_000;
+const BUSY_STATUSES = new Set([429, 504]);
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type Attempt = { ok: true; cemeteries: OsmCemetery[] } | { ok: false; cause: string; busy: boolean };
+
 /**
- * Calls Overpass over GET, trying each endpoint in order. An endpoint is
- * skipped on 429, 5xx, timeout, network error or unusable payload.
+ * Calls Overpass over GET, trying each endpoint in order (fallback chain).
+ * An endpoint is skipped on 429, 5xx, timeout, network error or unusable
+ * payload. The primary endpoint gets one quick retry when it is merely busy
+ * (429/504), and the whole chain never exceeds `totalBudgetMs`.
  */
 export class OverpassClient {
   private readonly endpoints: readonly string[];
   private readonly fetchImpl: FetchLike;
   private readonly timeoutMs: number;
+  private readonly totalBudgetMs: number;
+  private readonly primaryRetryDelayMs: number;
   private readonly headers: Record<string, string>;
 
   constructor(options: OverpassClientOptions = {}) {
     this.endpoints = options.endpoints ?? OVERPASS_ENDPOINTS;
     this.fetchImpl = options.fetchImpl ?? ((input, init) => fetch(input, init));
     this.timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
+    this.totalBudgetMs = options.totalBudgetMs ?? 45_000;
+    this.primaryRetryDelayMs = options.primaryRetryDelayMs ?? 1_500;
     this.headers = { Accept: "application/json", "User-Agent": options.userAgent ?? "RIP-Advisor/1.0" };
   }
 
@@ -180,28 +198,47 @@ export class OverpassClient {
     return results.find((c) => c.osmType === osmType && c.osmId === osmId) ?? null;
   }
 
-  private async run(query: string, { revalidate }: OverpassRequestOptions): Promise<OsmCemetery[]> {
+  private async run(query: string, options: OverpassRequestOptions): Promise<OsmCemetery[]> {
+    const deadline = Date.now() + this.totalBudgetMs;
     const causes: string[] = [];
 
-    for (const endpoint of this.endpoints) {
-      const url = `${endpoint}?data=${encodeURIComponent(query)}`;
-      try {
-        const response = await this.fetchImpl(url, {
-          method: "GET",
-          headers: this.headers,
-          signal: AbortSignal.timeout(this.timeoutMs),
-          ...(revalidate !== undefined ? { next: { revalidate } } : { cache: "no-store" }),
-        });
-        if (!response.ok) {
-          causes.push(`${new URL(endpoint).host}: HTTP ${response.status}`);
-          continue;
-        }
-        return parseOverpassResponse(await response.json());
-      } catch (error) {
-        causes.push(`${new URL(endpoint).host}: ${error instanceof Error ? error.name : "erreur"}`);
+    for (const [index, endpoint] of this.endpoints.entries()) {
+      let attempt = await this.attempt(endpoint, query, options, deadline);
+      if (!attempt.ok && attempt.busy && index === 0 && deadline - Date.now() > this.primaryRetryDelayMs + MIN_ATTEMPT_MS) {
+        causes.push(attempt.cause);
+        await sleep(this.primaryRetryDelayMs);
+        attempt = await this.attempt(endpoint, query, options, deadline);
       }
+      if (attempt.ok) return attempt.cemeteries;
+      causes.push(attempt.cause);
     }
 
     throw new OverpassUnavailableError(causes);
+  }
+
+  private async attempt(
+    endpoint: string,
+    query: string,
+    { revalidate }: OverpassRequestOptions,
+    deadline: number,
+  ): Promise<Attempt> {
+    const host = new URL(endpoint).host;
+    const remaining = deadline - Date.now();
+    if (remaining < MIN_ATTEMPT_MS) return { ok: false, cause: `${host}: budget épuisé`, busy: false };
+
+    try {
+      const response = await this.fetchImpl(`${endpoint}?data=${encodeURIComponent(query)}`, {
+        method: "GET",
+        headers: this.headers,
+        signal: AbortSignal.timeout(Math.min(this.timeoutMs, remaining)),
+        ...(revalidate !== undefined ? { next: { revalidate } } : { cache: "no-store" }),
+      });
+      if (!response.ok) {
+        return { ok: false, cause: `${host}: HTTP ${response.status}`, busy: BUSY_STATUSES.has(response.status) };
+      }
+      return { ok: true, cemeteries: parseOverpassResponse(await response.json()) };
+    } catch (error) {
+      return { ok: false, cause: `${host}: ${error instanceof Error ? error.name : "erreur"}`, busy: false };
+    }
   }
 }

@@ -126,16 +126,35 @@ describe("OverpassClient", () => {
     expect(decodeURIComponent(calls[0].split("?data=")[1])).toContain("[out:json]");
   });
 
-  it("falls back to the next endpoint on 429, 5xx and timeouts", async () => {
+  it("retries a busy primary once, then falls back on 5xx and timeouts", async () => {
     const timeout = new DOMException("timed out", "TimeoutError");
-    const { fetchImpl, calls } = fakeFetch([json({}, 429), timeout, json({ elements: [pereLachaise] })]);
-    const client = new OverpassClient({ endpoints, fetchImpl });
+    const { fetchImpl, calls } = fakeFetch([
+      json({}, 429),
+      json({}, 504),
+      timeout,
+      json({ elements: [pereLachaise] }),
+    ]);
+    const client = new OverpassClient({ endpoints, fetchImpl, primaryRetryDelayMs: 1 });
     await expect(client.cemeteriesIn(bbox)).resolves.toHaveLength(1);
-    expect(calls.map((u) => new URL(u).host)).toEqual(["a.example", "b.example", "c.example"]);
+    expect(calls.map((u) => new URL(u).host)).toEqual(["a.example", "a.example", "b.example", "c.example"]);
+  });
+
+  it("does not retry the primary on other errors", async () => {
+    const { fetchImpl, calls } = fakeFetch([json({}, 500), json({ elements: [] })]);
+    const client = new OverpassClient({ endpoints, fetchImpl, primaryRetryDelayMs: 1 });
+    await expect(client.cemeteriesIn(bbox)).resolves.toEqual([]);
+    expect(calls.map((u) => new URL(u).host)).toEqual(["a.example", "b.example"]);
+  });
+
+  it("stops when the total budget is spent", async () => {
+    const { fetchImpl, calls } = fakeFetch([json({}, 500), json({}, 500), json({}, 500)]);
+    const client = new OverpassClient({ endpoints, fetchImpl, totalBudgetMs: 0 });
+    await expect(client.cemeteriesIn(bbox)).rejects.toBeInstanceOf(OverpassUnavailableError);
+    expect(calls).toHaveLength(0);
   });
 
   it("throws OverpassUnavailableError when every endpoint fails", async () => {
-    const { fetchImpl } = fakeFetch([json({}, 504), json({}, 502), new TypeError("fetch failed")]);
+    const { fetchImpl } = fakeFetch([json({}, 500), json({}, 502), new TypeError("fetch failed")]);
     const client = new OverpassClient({ endpoints, fetchImpl });
     await expect(client.cemeteriesIn(bbox)).rejects.toBeInstanceOf(OverpassUnavailableError);
   });
