@@ -7,7 +7,7 @@ import DeleteReviewButton from "@/components/reviews/DeleteReviewButton";
 import ReviewForm from "@/components/reviews/ReviewForm";
 import { requireUser } from "@/lib/auth/session";
 import { createReviewService } from "@/lib/services/factory";
-import { cemeteryPath, UNNAMED_CEMETERY } from "@/lib/types";
+import { cemeteryName, cemeteryPath } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Modifier mon avis",
@@ -24,7 +24,7 @@ export default async function EditReviewPage({ params }: { params: Promise<{ id:
   const review = await (await createReviewService()).findOwned(id, user.id);
   if (!review) notFound();
 
-  const name = review.cemetery.name ?? UNNAMED_CEMETERY;
+  const name = cemeteryName(review.cemetery);
   const backHref = cemeteryPath(review.cemetery);
 
   return (
@@ -46,7 +46,7 @@ export default async function EditReviewPage({ params }: { params: Promise<{ id:
           <Link href={backHref} className="text-ash underline">
             Annuler
           </Link>
-          <DeleteReviewButton reviewId={review.id} cemeteryName={name} />
+          <DeleteReviewButton reviewId={review.id} cemeteryName={name} returnToCemetery />
         </div>
       </div>
     </div>

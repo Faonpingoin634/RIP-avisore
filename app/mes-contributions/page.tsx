@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import DeleteReviewButton from "@/components/reviews/DeleteReviewButton";
+import OwnReviewActions from "@/components/reviews/OwnReviewActions";
 import ReviewCard from "@/components/reviews/ReviewCard";
+import { buttonStyles } from "@/components/ui/styles";
 import { requireUser } from "@/lib/auth/session";
 import { createReviewService } from "@/lib/services/factory";
-import { cemeteryPath, UNNAMED_CEMETERY } from "@/lib/types";
+import { cemeteryName, cemeteryPath } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Mes contributions",
@@ -29,17 +30,14 @@ export default async function MyContributionsPage() {
       {reviews.length === 0 ? (
         <div className="mt-8 rounded-xl border border-dashed border-mist p-8 text-center">
           <p className="text-ash">Parcourez la carte, ouvrez la fiche d&apos;un cimetière et partagez votre ressenti.</p>
-          <Link
-            href="/"
-            className="mt-4 inline-block rounded-md bg-candle px-4 py-2 font-semibold text-crypt no-underline hover:bg-candle-dark"
-          >
+          <Link href="/" className={`mt-4 inline-block ${buttonStyles.primary}`}>
             Explorer la carte
           </Link>
         </div>
       ) : (
         <ol className="mt-6 flex flex-col gap-4">
           {reviews.map((review) => {
-            const name = review.cemetery.name ?? UNNAMED_CEMETERY;
+            const name = cemeteryName(review.cemetery);
             return (
               <li key={review.id}>
                 <ReviewCard
@@ -49,17 +47,7 @@ export default async function MyContributionsPage() {
                       <Link href={cemeteryPath(review.cemetery)}>{name}</Link>
                     </h2>
                   }
-                  actions={
-                    <>
-                      <Link
-                        href={`/avis/${review.id}/modifier`}
-                        className="rounded-md bg-candle px-3 py-1.5 font-semibold text-crypt no-underline hover:bg-candle-dark"
-                      >
-                        Modifier
-                      </Link>
-                      <DeleteReviewButton reviewId={review.id} cemeteryName={name} />
-                    </>
-                  }
+                  actions={<OwnReviewActions reviewId={review.id} cemeteryName={name} />}
                 />
               </li>
             );

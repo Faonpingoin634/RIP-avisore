@@ -1,48 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { BoundingBox } from "@/lib/osm/cells";
-import type { Database, Json } from "@/lib/supabase/database.types";
+import type { Database } from "@/lib/supabase/database.types";
 import {
   cemeteryKey,
+  NO_RATING,
+  pickCemeteryTags,
   type CemeteryMarker,
-  type CemeteryTags,
   type OsmCemetery,
   type OsmType,
   type RatingSummary,
 } from "@/lib/types";
+import { chunk, RepositoryError } from "./errors";
 
 type CemeteryRow = Database["public"]["Tables"]["cemeteries"]["Row"];
 type RatingRow = Database["public"]["Views"]["cemetery_ratings"]["Row"];
 
 /** A cemetery stored in our database (it has been opened at least once). */
 export type StoredCemetery = OsmCemetery & RatingSummary & { id: string };
-
-export class RepositoryError extends Error {
-  constructor(operation: string, cause: { message: string; code?: string }) {
-    super(`${operation} : ${cause.message}`);
-    this.name = "RepositoryError";
-  }
-}
-
-// Keeps PostgREST URLs short for `in (...)` filters.
-const IN_FILTER_CHUNK = 100;
-const NO_RATING: RatingSummary = { reviewCount: 0, avgRating: null, avgHumidity: null };
-
-function chunk<T>(items: readonly T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
-  return chunks;
-}
-
-function toTags(json: Json): CemeteryTags {
-  if (json === null || typeof json !== "object" || Array.isArray(json)) return {};
-  const tags: CemeteryTags = {};
-  for (const key of ["religion", "operator", "wikipedia", "website"] as const) {
-    const value = json[key];
-    if (typeof value === "string" && value) tags[key] = value;
-  }
-  return tags;
-}
 
 function toRating(row: RatingRow | undefined): RatingSummary {
   if (!row) return NO_RATING;
@@ -54,6 +29,7 @@ function toRating(row: RatingRow | undefined): RatingSummary {
 }
 
 function toStored(row: CemeteryRow, rating: RatingRow | undefined): StoredCemetery {
+  const tags = row.tags !== null && typeof row.tags === "object" && !Array.isArray(row.tags) ? row.tags : {};
   return {
     id: row.id,
     osmType: row.osm_type,
@@ -61,10 +37,27 @@ function toStored(row: CemeteryRow, rating: RatingRow | undefined): StoredCemete
     name: row.name,
     lat: row.latitude,
     lon: row.longitude,
-    tags: toTags(row.tags),
+    tags: pickCemeteryTags(tags),
     ...toRating(rating),
   };
 }
+
+/** Map marker = OSM data + ratings. Fields are copied explicitly so the database id never leaks. */
+export function toMarker(cemetery: OsmCemetery, rating: RatingSummary = NO_RATING): CemeteryMarker {
+  return {
+    osmType: cemetery.osmType,
+    osmId: cemetery.osmId,
+    name: cemetery.name,
+    lat: cemetery.lat,
+    lon: cemetery.lon,
+    tags: cemetery.tags,
+    reviewCount: rating.reviewCount,
+    avgRating: rating.avgRating,
+    avgHumidity: rating.avgHumidity,
+  };
+}
+
+const rowKey = (row: CemeteryRow) => cemeteryKey({ osmType: row.osm_type, osmId: row.osm_id });
 
 /**
  * Data access for cemeteries and their aggregated ratings (Repository pattern).
@@ -90,17 +83,18 @@ export class CemeteryRepository {
   /** Stored cemeteries among the given OSM elements, keyed by "type/id". */
   async findManyByOsm(elements: readonly OsmCemetery[]): Promise<Map<string, StoredCemetery>> {
     const wanted = new Set(elements.map(cemeteryKey));
+    const types = [...new Set(elements.map((e) => e.osmType))];
     const ids = [...new Set(elements.map((e) => e.osmId))];
     const rows: CemeteryRow[] = [];
 
-    for (const part of chunk(ids, IN_FILTER_CHUNK)) {
-      const { data, error } = await this.db.from("cemeteries").select("*").in("osm_id", part);
+    for (const part of chunk(ids)) {
+      // Filtering on both columns lets Postgres use the unique (osm_type, osm_id) index.
+      const { data, error } = await this.db.from("cemeteries").select("*").in("osm_type", types).in("osm_id", part);
       if (error) throw new RepositoryError("Lecture des cimetières", error);
       rows.push(...data);
     }
 
-    const matching = rows.filter((row) => wanted.has(`${row.osm_type}/${row.osm_id}`));
-    return this.withRatings(matching);
+    return this.withRatings(rows.filter((row) => wanted.has(rowKey(row))));
   }
 
   async findInBbox(bbox: BoundingBox): Promise<StoredCemetery[]> {
@@ -128,7 +122,7 @@ export class CemeteryRepository {
 
     const ratingById = new Map(ratings.map((r) => [r.cemetery_id, r]));
     const rows: CemeteryRow[] = [];
-    for (const part of chunk([...ratingById.keys()], IN_FILTER_CHUNK)) {
+    for (const part of chunk([...ratingById.keys()])) {
       const { data, error: rowsError } = await this.db.from("cemeteries").select("*").in("id", part);
       if (rowsError) throw new RepositoryError("Lecture des cimetières notés", rowsError);
       rows.push(...data);
@@ -161,7 +155,7 @@ export class CemeteryRepository {
 
   private async ratingsFor(ids: readonly string[]): Promise<Map<string, RatingRow>> {
     const result = new Map<string, RatingRow>();
-    for (const part of chunk(ids, IN_FILTER_CHUNK)) {
+    for (const part of chunk(ids)) {
       const { data, error } = await this.db.from("cemetery_ratings").select("*").in("cemetery_id", part);
       if (error) throw new RepositoryError("Lecture des notes", error);
       data.forEach((row) => result.set(row.cemetery_id, row));
@@ -170,17 +164,8 @@ export class CemeteryRepository {
   }
 
   private async withRatings(rows: readonly CemeteryRow[]): Promise<Map<string, StoredCemetery>> {
+    if (rows.length === 0) return new Map();
     const ratings = await this.ratingsFor(rows.map((r) => r.id));
-    return new Map(rows.map((row) => [`${row.osm_type}/${row.osm_id}`, toStored(row, ratings.get(row.id))]));
+    return new Map(rows.map((row) => [rowKey(row), toStored(row, ratings.get(row.id))]));
   }
-}
-
-export function toMarker(cemetery: OsmCemetery, stored: StoredCemetery | undefined): CemeteryMarker {
-  if (!stored) return { ...cemetery, ...NO_RATING };
-  return {
-    ...cemetery,
-    reviewCount: stored.reviewCount,
-    avgRating: stored.avgRating,
-    avgHumidity: stored.avgHumidity,
-  };
 }

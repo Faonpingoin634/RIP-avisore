@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import DeleteReviewButton from "@/components/reviews/DeleteReviewButton";
+import OwnReviewActions from "@/components/reviews/OwnReviewActions";
 import ReviewCard from "@/components/reviews/ReviewCard";
 import ReviewForm from "@/components/reviews/ReviewForm";
 import ReviewList from "@/components/reviews/ReviewList";
 import RetryButton from "@/components/ui/RetryButton";
 import ScoreDisplay, { formatScore } from "@/components/ui/ScoreDisplay";
+import { buttonStyles } from "@/components/ui/styles";
 import { loginUrlFor } from "@/lib/auth/safe-redirect";
 import { getCurrentUser } from "@/lib/auth/session";
 import { lookupCemetery, parseCemeteryParams, type CemeteryParams } from "@/lib/cemetery-page";
@@ -15,7 +16,7 @@ import { safeExternalUrl, wikipediaUrl } from "@/lib/format";
 import { mapUrlFor } from "@/lib/map/view";
 import type { StoredCemetery } from "@/lib/repositories/cemetery-repository";
 import { createReviewService } from "@/lib/services/factory";
-import { cemeteryPath, UNNAMED_CEMETERY } from "@/lib/types";
+import { cemeteryName, cemeteryPath } from "@/lib/types";
 
 type Props = { params: Promise<CemeteryParams> };
 
@@ -25,7 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const lookup = await lookupCemetery(parsed.osmType, parsed.osmId);
   if (lookup.status !== "found") return { title: "Cimetière" };
 
-  const name = lookup.cemetery.name ?? UNNAMED_CEMETERY;
+  const name = cemeteryName(lookup.cemetery);
   const rating =
     lookup.cemetery.avgRating !== null
       ? ` Note moyenne : ${formatScore(lookup.cemetery.avgRating)}/5 sur ${lookup.cemetery.reviewCount} avis.`
@@ -49,7 +50,7 @@ function CemeteryHeader({ cemetery }: { cemetery: StoredCemetery }) {
 
   return (
     <header className="rounded-xl border border-mist bg-tomb p-6">
-      <h1 className="font-display text-3xl font-bold">{cemetery.name ?? UNNAMED_CEMETERY}</h1>
+      <h1 className="font-display text-3xl font-bold">{cemeteryName(cemetery)}</h1>
 
       <dl className="mt-4 grid gap-x-6 gap-y-1 sm:grid-cols-[auto_1fr]">
         {cemetery.tags.religion && (
@@ -135,7 +136,7 @@ export default async function CemeteryPage({ params }: Props) {
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <RetryButton />
-          <Link href="/" className="rounded-md border border-mist px-4 py-2 text-bone no-underline hover:bg-vault">
+          <Link href="/" className={buttonStyles.secondary}>
             Retour à la carte
           </Link>
         </div>
@@ -145,7 +146,7 @@ export default async function CemeteryPage({ params }: Props) {
 
   const { cemetery } = lookup;
   const path = cemeteryPath(cemetery);
-  const name = cemetery.name ?? UNNAMED_CEMETERY;
+  const name = cemeteryName(cemetery);
   const [user, reviews] = await Promise.all([
     getCurrentUser(),
     createReviewService().then((service) => service.listForCemetery(cemetery.id)),
@@ -165,16 +166,10 @@ export default async function CemeteryPage({ params }: Props) {
             </h2>
             <p className="mt-2 text-ash">Connectez-vous pour donner votre avis sur ce cimetière.</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link
-                href={loginUrlFor(path)}
-                className="rounded-md bg-candle px-4 py-2 font-semibold text-crypt no-underline hover:bg-candle-dark"
-              >
+              <Link href={loginUrlFor(path)} className={buttonStyles.primary}>
                 Se connecter
               </Link>
-              <Link
-                href={`/inscription?next=${encodeURIComponent(path)}`}
-                className="rounded-md border border-mist px-4 py-2 text-bone no-underline hover:bg-vault"
-              >
+              <Link href={`/inscription?next=${encodeURIComponent(path)}`} className={buttonStyles.secondary}>
                 Créer un compte
               </Link>
             </div>
@@ -198,17 +193,7 @@ export default async function CemeteryPage({ params }: Props) {
             <ReviewCard
               review={ownReview}
               highlighted
-              actions={
-                <>
-                  <Link
-                    href={`/avis/${ownReview.id}/modifier`}
-                    className="rounded-md bg-candle px-3 py-1.5 font-semibold text-crypt no-underline hover:bg-candle-dark"
-                  >
-                    Modifier
-                  </Link>
-                  <DeleteReviewButton reviewId={ownReview.id} cemeteryName={name} />
-                </>
-              }
+              actions={<OwnReviewActions reviewId={ownReview.id} cemeteryName={name} />}
             />
           </div>
         )}

@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-import { cemeteryKey, type CemeteryMarker } from "@/lib/types";
+import { cemeteryKey, OSM_TYPES, type CemeteryMarker, type CemeteryTags } from "@/lib/types";
 
 const markerSchema = z.object({
-  osmType: z.enum(["node", "way", "relation"]),
+  osmType: z.enum(OSM_TYPES),
   osmId: z.number().int().positive(),
   name: z.string().nullable(),
   lat: z.number(),
@@ -13,7 +13,7 @@ const markerSchema = z.object({
     operator: z.string().optional(),
     wikipedia: z.string().optional(),
     website: z.string().optional(),
-  }),
+  }) satisfies z.ZodType<CemeteryTags>,
   reviewCount: z.number().int().nonnegative(),
   avgRating: z.number().nullable(),
   avgHumidity: z.number().nullable(),
@@ -52,10 +52,14 @@ export class CemeteryStore {
   private reviewedRequest: Promise<void> | null = null;
   private reviewedLoading = false;
   private reviewedFailed = false;
+  /** Set when `markers` changed since the last snapshot, so the array is only rebuilt when needed. */
+  private markersDirty = false;
   private snapshot: StoreSnapshot = { markers: [], loading: false, degraded: false, failed: false };
 
   constructor(
-    private readonly fetcher: Fetcher = (input) => fetch(input),
+    // `no-cache`: the responses carry live ratings. Without it, the browser applies
+    // `stale-while-revalidate` (meant for the CDN) and shows a just-posted review late.
+    private readonly fetcher: Fetcher = (input) => fetch(input, { cache: "no-cache" }),
     private readonly concurrency = 2,
   ) {}
 
@@ -142,17 +146,52 @@ export class CemeteryStore {
   }
 
   private merge(cemeteries: readonly CemeteryMarker[]): void {
-    for (const cemetery of cemeteries) this.markers.set(cemeteryKey(cemetery), cemetery);
+    for (const cemetery of cemeteries) {
+      const key = cemeteryKey(cemetery);
+      if (!sameMarker(this.markers.get(key), cemetery)) {
+        this.markers.set(key, cemetery);
+        this.markersDirty = true;
+      }
+    }
   }
 
+  /**
+   * Publishes a new snapshot only when something visible changed. The markers
+   * array keeps its identity while no marker changed, so the (memoised) marker
+   * layer is not re-rendered on every loading toggle.
+   */
   private emit(): void {
+    const previous = this.snapshot;
     const visible = [...this.visibleCells];
-    this.snapshot = {
-      markers: [...this.markers.values()],
+    const next: StoreSnapshot = {
+      markers: this.markersDirty ? [...this.markers.values()] : previous.markers,
       loading: this.inFlight.size > 0 || this.queue.length > 0 || this.reviewedLoading,
       degraded: visible.some((id) => this.degradedCells.has(id)),
       failed: this.reviewedFailed || visible.some((id) => this.failedCells.has(id)),
     };
+    this.markersDirty = false;
+    if (
+      next.markers === previous.markers &&
+      next.loading === previous.loading &&
+      next.degraded === previous.degraded &&
+      next.failed === previous.failed
+    ) {
+      return;
+    }
+    this.snapshot = next;
     this.listeners.forEach((listener) => listener());
   }
+}
+
+/** Same position, name and ratings: re-rendering the marker would change nothing. */
+function sameMarker(a: CemeteryMarker | undefined, b: CemeteryMarker): boolean {
+  return (
+    a !== undefined &&
+    a.lat === b.lat &&
+    a.lon === b.lon &&
+    a.name === b.name &&
+    a.reviewCount === b.reviewCount &&
+    a.avgRating === b.avgRating &&
+    a.avgHumidity === b.avgHumidity
+  );
 }

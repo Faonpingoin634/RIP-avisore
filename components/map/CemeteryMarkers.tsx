@@ -1,12 +1,12 @@
 "use client";
 
 import L from "leaflet";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { memo } from "react";
 import { Marker, Popup } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 
-import { cemeteryKey, cemeteryPath, UNNAMED_CEMETERY, type CemeteryMarker } from "@/lib/types";
+import { cemeteryKey, cemeteryName, cemeteryPath, type CemeteryMarker } from "@/lib/types";
 
 const iconCache = new Map<string, L.DivIcon>();
 
@@ -36,10 +36,16 @@ function iconFor(cemetery: CemeteryMarker): L.DivIcon {
   return icon;
 }
 
+/** Opening a never-visited cemetery queries OpenStreetMap first: show that the click was taken into account. */
+function OpenLabel() {
+  const { pending } = useLinkStatus();
+  return <span aria-live="polite">{pending ? "Ouverture…" : "Voir la fiche"}</span>;
+}
+
 function MarkerPopup({ cemetery }: { cemetery: CemeteryMarker }) {
   return (
     <div className="min-w-48">
-      <p className="m-0 font-display text-lg font-bold text-bone">{cemetery.name ?? UNNAMED_CEMETERY}</p>
+      <p className="m-0 font-display text-lg font-bold text-bone">{cemeteryName(cemetery)}</p>
       {cemetery.reviewCount > 0 && cemetery.avgRating !== null ? (
         <p className="my-1 text-ash">
           <span aria-hidden="true">💀 </span>
@@ -50,9 +56,10 @@ function MarkerPopup({ cemetery }: { cemetery: CemeteryMarker }) {
       )}
       <Link
         href={cemeteryPath(cemetery)}
+        prefetch={false}
         className="mt-2 inline-block rounded-md bg-candle px-3 py-1.5 font-semibold !text-crypt no-underline hover:bg-candle-dark"
       >
-        Voir la fiche
+        <OpenLabel />
       </Link>
     </div>
   );
@@ -66,8 +73,8 @@ function CemeteryMarkers({ cemeteries }: { cemeteries: readonly CemeteryMarker[]
           key={cemeteryKey(cemetery)}
           position={[cemetery.lat, cemetery.lon]}
           icon={iconFor(cemetery)}
-          title={cemetery.name ?? UNNAMED_CEMETERY}
-          alt={cemetery.name ?? UNNAMED_CEMETERY}
+          title={cemeteryName(cemetery)}
+          alt={cemeteryName(cemetery)}
           keyboard
         >
           <Popup>

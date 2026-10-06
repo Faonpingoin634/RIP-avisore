@@ -1,7 +1,7 @@
 import type { Cell } from "@/lib/osm/cells";
 import { OverpassUnavailableError, type OverpassClient } from "@/lib/osm/overpass";
 import { CemeteryRepository, toMarker, type StoredCemetery } from "@/lib/repositories/cemetery-repository";
-import type { CemeteriesResponse, CemeteryMarker, OsmType } from "@/lib/types";
+import { cemeteryKey, type CemeteriesResponse, type CemeteryMarker, type OsmType } from "@/lib/types";
 
 /** Overpass responses are kept 7 days in the Next.js data cache. */
 export const CELL_REVALIDATE_SECONDS = 604_800;
@@ -11,11 +11,6 @@ export type CemeteryLookup =
   | { status: "found"; cemetery: StoredCemetery }
   | { status: "not-found" }
   | { status: "unavailable" };
-
-function storedToMarker(stored: StoredCemetery): CemeteryMarker {
-  const { osmType, osmId, name, lat, lon, tags, reviewCount, avgRating, avgHumidity } = stored;
-  return { osmType, osmId, name, lat, lon, tags, reviewCount, avgRating, avgHumidity };
-}
 
 /**
  * Facade over Overpass + database. OpenStreetMap is the source of truth; the
@@ -35,22 +30,22 @@ export class CemeteryService {
   async cemeteriesInCell(cell: Cell): Promise<CemeteriesResponse> {
     try {
       const fromOsm = await this.overpass.cemeteriesIn(cell.bbox, { revalidate: CELL_REVALIDATE_SECONDS });
-      const stored = fromOsm.length > 0 ? await this.reader.findManyByOsm(fromOsm) : new Map();
+      const stored = await this.reader.findManyByOsm(fromOsm);
       return {
-        cemeteries: fromOsm.map((c) => toMarker(c, stored.get(`${c.osmType}/${c.osmId}`))),
+        cemeteries: fromOsm.map((c) => toMarker(c, stored.get(cemeteryKey(c)))),
         degraded: false,
       };
     } catch (error) {
       if (!(error instanceof OverpassUnavailableError)) throw error;
       console.warn(`[overpass] cellule ${cell.id} en mode dégradé — ${error.message}`);
       const stored = await this.reader.findInBbox(cell.bbox);
-      return { cemeteries: stored.map(storedToMarker), degraded: true };
+      return { cemeteries: stored.map((c) => toMarker(c, c)), degraded: true };
     }
   }
 
   async reviewedCemeteries(): Promise<CemeteryMarker[]> {
     const stored = await this.reader.findReviewed(REVIEWED_LIMIT);
-    return stored.map(storedToMarker);
+    return stored.map((c) => toMarker(c, c));
   }
 
   /**

@@ -5,10 +5,10 @@ import { z } from "zod";
 
 import { createCemeteryPageService } from "@/lib/services/factory";
 import type { CemeteryLookup } from "@/lib/services/cemetery-service";
-import { OSM_TYPES, type OsmType } from "@/lib/types";
+import { OSM_TYPES, type CemeteryRef, type OsmType } from "@/lib/types";
 
 const paramsSchema = z.object({
-  osmType: z.enum(OSM_TYPES as [OsmType, ...OsmType[]]),
+  osmType: z.enum(OSM_TYPES),
   osmId: z
     .string()
     .regex(/^[1-9]\d{0,15}$/)
@@ -19,7 +19,7 @@ const paramsSchema = z.object({
 export type CemeteryParams = { osmType: string; osmId: string };
 
 /** Validated route params, or null (→ notFound). */
-export function parseCemeteryParams(params: CemeteryParams): { osmType: OsmType; osmId: number } | null {
+export function parseCemeteryParams(params: CemeteryParams): CemeteryRef | null {
   const parsed = paramsSchema.safeParse(params);
   return parsed.success ? parsed.data : null;
 }

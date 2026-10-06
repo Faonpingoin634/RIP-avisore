@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import type { BoundingBox } from "@/lib/osm/cells";
-import type { CemeteryTags, OsmCemetery, OsmType } from "@/lib/types";
+import { cemeteryKey, OSM_TYPES, pickCemeteryTags, type OsmCemetery, type OsmType } from "@/lib/types";
 
 export const OVERPASS_ENDPOINTS: readonly string[] = [
   "https://overpass-api.de/api/interpreter",
@@ -10,7 +10,6 @@ export const OVERPASS_ENDPOINTS: readonly string[] = [
 ];
 
 const REQUEST_TIMEOUT_MS = 20_000;
-const KEPT_TAGS = ["religion", "operator", "wikipedia", "website"] as const;
 
 /* ------------------------------------------------------------------ */
 /* Query builder                                                      */
@@ -48,7 +47,7 @@ export class OverpassQuery {
 const coordinate = z.number().finite();
 
 const elementSchema = z.object({
-  type: z.enum(["node", "way", "relation"]),
+  type: z.enum(OSM_TYPES),
   id: z.number().int().positive(),
   lat: coordinate.optional(),
   lon: coordinate.optional(),
@@ -67,15 +66,6 @@ export function isCemeteryTags(tags: Record<string, string> | undefined): boolea
   return tags?.landuse === "cemetery" || tags?.amenity === "grave_yard";
 }
 
-function pickTags(tags: Record<string, string>): CemeteryTags {
-  const picked: CemeteryTags = {};
-  for (const key of KEPT_TAGS) {
-    const value = tags[key]?.trim();
-    if (value) picked[key] = value;
-  }
-  return picked;
-}
-
 function toCemetery(element: OverpassElement): OsmCemetery | null {
   const lat = element.lat ?? element.center?.lat;
   const lon = element.lon ?? element.center?.lon;
@@ -91,7 +81,7 @@ function toCemetery(element: OverpassElement): OsmCemetery | null {
     name: tags.name?.trim() || null,
     lat,
     lon,
-    tags: pickTags(tags),
+    tags: pickCemeteryTags(tags),
   };
 }
 
@@ -114,7 +104,7 @@ export function parseOverpassResponse(payload: unknown): OsmCemetery[] {
     const element = elementSchema.safeParse(raw);
     if (!element.success) continue;
     const cemetery = toCemetery(element.data);
-    if (cemetery) byKey.set(`${cemetery.osmType}/${cemetery.osmId}`, cemetery);
+    if (cemetery) byKey.set(cemeteryKey(cemetery), cemetery);
   }
   return [...byKey.values()];
 }

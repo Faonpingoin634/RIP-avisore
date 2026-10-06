@@ -13,6 +13,8 @@ const REVIEW = "0b8f5d0e-1c2d-4e3f-8a9b-0c1d2e3f4a5b";
 const ALICE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const BOB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
+const CEMETERY_REF = { osmType: "way", osmId: 23370720 } as const;
+
 const fields: ReviewFields = { rating: 4, humidity: 2, vibes: ["paisible"], comment: "Très calme, voisins discrets." };
 
 /** In-memory stand-in for ReviewRepository reproducing the (id AND user_id) scoping. */
@@ -27,18 +29,18 @@ class FakeReviewRepository {
     return REVIEW;
   }
 
-  async update(reviewId: string, userId: string, f: ReviewFields): Promise<string | null> {
+  async update(reviewId: string, userId: string, f: ReviewFields) {
     const row = this.rows.find((r) => r.id === reviewId && r.userId === userId);
     if (!row) return null;
     Object.assign(row, f);
-    return row.cemeteryId;
+    return CEMETERY_REF;
   }
 
-  async delete(reviewId: string, userId: string): Promise<string | null> {
+  async delete(reviewId: string, userId: string) {
     const index = this.rows.findIndex((r) => r.id === reviewId && r.userId === userId);
     if (index === -1) return null;
-    const [row] = this.rows.splice(index, 1);
-    return row.cemeteryId;
+    this.rows.splice(index, 1);
+    return CEMETERY_REF;
   }
 
   async findByAuthor(cemeteryId: string, userId: string): Promise<Review | null> {
@@ -58,16 +60,15 @@ function setup() {
 describe("ReviewService", () => {
   it("creates a review for the authenticated user", async () => {
     const { repository, service } = setup();
-    const { result, cemeteryId } = await service.create(ALICE, { cemeteryId: CEMETERY, ...fields });
+    const result = await service.create(ALICE, { cemeteryId: CEMETERY, ...fields });
     expect(result).toEqual({ ok: true });
-    expect(cemeteryId).toBe(CEMETERY);
     expect(repository.rows[0].userId).toBe(ALICE);
   });
 
   it("refuses a second review on the same cemetery with a link to edit the first", async () => {
     const { service } = setup();
     await service.create(ALICE, { cemeteryId: CEMETERY, ...fields });
-    const { result } = await service.create(ALICE, { cemeteryId: CEMETERY, ...fields });
+    const result = await service.create(ALICE, { cemeteryId: CEMETERY, ...fields });
     expect(result).toEqual({
       ok: false,
       error: ALREADY_REVIEWED,
@@ -75,12 +76,15 @@ describe("ReviewService", () => {
     });
   });
 
-  it("lets the author update and delete", async () => {
+  it("lets the author update and delete, returning the cemetery to go back to", async () => {
     const { repository, service } = setup();
     await service.create(ALICE, { cemeteryId: CEMETERY, ...fields });
-    expect((await service.update(ALICE, { reviewId: REVIEW, ...fields, rating: 1 })).result.ok).toBe(true);
+    expect(await service.update(ALICE, { reviewId: REVIEW, ...fields, rating: 1 })).toEqual({
+      result: { ok: true },
+      cemetery: CEMETERY_REF,
+    });
     expect(repository.rows[0].rating).toBe(1);
-    expect((await service.delete(ALICE, REVIEW)).result.ok).toBe(true);
+    expect(await service.delete(ALICE, REVIEW)).toEqual({ result: { ok: true }, cemetery: CEMETERY_REF });
     expect(repository.rows).toHaveLength(0);
   });
 
@@ -89,9 +93,9 @@ describe("ReviewService", () => {
     await service.create(ALICE, { cemeteryId: CEMETERY, ...fields });
 
     const update = await service.update(BOB, { reviewId: REVIEW, ...fields, rating: 1 });
-    expect(update.result).toEqual({ ok: false, error: NOT_FOUND_OR_FORBIDDEN });
+    expect(update).toEqual({ result: { ok: false, error: NOT_FOUND_OR_FORBIDDEN }, cemetery: null });
     const removal = await service.delete(BOB, REVIEW);
-    expect(removal.result).toEqual({ ok: false, error: NOT_FOUND_OR_FORBIDDEN });
+    expect(removal).toEqual({ result: { ok: false, error: NOT_FOUND_OR_FORBIDDEN }, cemetery: null });
 
     expect(repository.rows).toHaveLength(1);
     expect(repository.rows[0].rating).toBe(4);
@@ -104,5 +108,18 @@ describe("reviewErrorMessage", () => {
     expect(reviewErrorMessage("42501")).toBe(NOT_FOUND_OR_FORBIDDEN);
     expect(reviewErrorMessage("23514")).toMatch(/invalide/);
     expect(reviewErrorMessage("XX000")).not.toMatch(/XX000/);
+  });
+});
+
+describe("ReviewService errors", () => {
+  it("never leaks a raw database message and reports no cemetery", async () => {
+    const { repository, service } = setup();
+    repository.update = async () => {
+      throw new ReviewWriteError("XX000", "internal: relation secret_table does not exist");
+    };
+    const { result, cemetery } = await service.update(ALICE, { reviewId: REVIEW, ...fields });
+    expect(cemetery).toBeNull();
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toMatch(/secret_table/);
   });
 });

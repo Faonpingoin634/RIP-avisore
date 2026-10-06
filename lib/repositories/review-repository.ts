@@ -1,7 +1,8 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database, OsmType, ReviewVibe } from "@/lib/supabase/database.types";
-import { RepositoryError } from "./cemetery-repository";
+import type { CemeteryRef } from "@/lib/types";
+import { RepositoryError } from "./errors";
 
 export type Review = {
   id: string;
@@ -17,7 +18,7 @@ export type Review = {
 };
 
 export type ReviewWithCemetery = Review & {
-  cemetery: { osmType: OsmType; osmId: number; name: string | null };
+  cemetery: CemeteryRef & { name: string | null };
 };
 
 export type ReviewFields = Pick<Review, "rating" | "humidity" | "vibes" | "comment">;
@@ -32,10 +33,14 @@ export class ReviewWriteError extends Error {
 
 const REVIEW_COLUMNS = "id, cemetery_id, user_id, rating, humidity, vibes, comment, created_at, updated_at";
 const WITH_AUTHOR = `${REVIEW_COLUMNS}, author:profiles!reviews_user_id_fkey(username)`;
-const WITH_CEMETERY = `${WITH_AUTHOR}, cemetery:cemeteries!reviews_cemetery_id_fkey(osm_type, osm_id, name)`;
+const CEMETERY_JOIN = "cemetery:cemeteries!reviews_cemetery_id_fkey";
+const WITH_CEMETERY = `${WITH_AUTHOR}, ${CEMETERY_JOIN}(osm_type, osm_id, name)`;
+/** Returned by update/delete: where the affected review lives, to revalidate or redirect. */
+const MUTATION_RETURNING = `${CEMETERY_JOIN}(osm_type, osm_id)`;
 
 type ReviewRow = Database["public"]["Tables"]["reviews"]["Row"];
 type AuthorJoin = { author: { username: string } | null };
+type CemeteryJoin = { cemetery: { osm_type: OsmType; osm_id: number; name: string | null } | null };
 
 function toReview(row: ReviewRow & AuthorJoin): Review {
   return {
@@ -50,6 +55,18 @@ function toReview(row: ReviewRow & AuthorJoin): Review {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function toReviewWithCemetery(row: ReviewRow & AuthorJoin & CemeteryJoin): ReviewWithCemetery | null {
+  if (!row.cemetery) return null;
+  const { osm_type, osm_id, name } = row.cemetery;
+  return { ...toReview(row), cemetery: { osmType: osm_type, osmId: osm_id, name } };
+}
+
+/** The cemetery of the single affected row, or null when nothing matched (not found / not the owner). */
+function affectedCemetery(rows: ReadonlyArray<{ cemetery: { osm_type: OsmType; osm_id: number } | null }>): CemeteryRef | null {
+  const cemetery = rows.length === 1 ? rows[0].cemetery : null;
+  return cemetery ? { osmType: cemetery.osm_type, osmId: cemetery.osm_id } : null;
 }
 
 function writeError(error: PostgrestError): ReviewWriteError {
@@ -81,16 +98,7 @@ export class ReviewRepository {
       .eq("user_id", userId)
       .order("updated_at", { ascending: false });
     if (error) throw new RepositoryError("Lecture de vos avis", error);
-    return data.flatMap((row) =>
-      row.cemetery
-        ? [
-            {
-              ...toReview(row),
-              cemetery: { osmType: row.cemetery.osm_type, osmId: row.cemetery.osm_id, name: row.cemetery.name },
-            },
-          ]
-        : [],
-    );
+    return data.flatMap((row) => toReviewWithCemetery(row) ?? []);
   }
 
   /** A review only if it belongs to `userId`. */
@@ -102,11 +110,7 @@ export class ReviewRepository {
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw new RepositoryError("Lecture de l'avis", error);
-    if (!data?.cemetery) return null;
-    return {
-      ...toReview(data),
-      cemetery: { osmType: data.cemetery.osm_type, osmId: data.cemetery.osm_id, name: data.cemetery.name },
-    };
+    return data ? toReviewWithCemetery(data) : null;
   }
 
   async findByAuthor(cemeteryId: string, userId: string): Promise<Review | null> {
@@ -130,27 +134,27 @@ export class ReviewRepository {
     return data.id;
   }
 
-  /** Updates only if `userId` owns the review. Returns the affected cemetery id, or null if nothing matched. */
-  async update(reviewId: string, userId: string, fields: ReviewFields): Promise<string | null> {
+  /** Updates only if `userId` owns the review. Returns its cemetery, or null if nothing matched. */
+  async update(reviewId: string, userId: string, fields: ReviewFields): Promise<CemeteryRef | null> {
     const { data, error } = await this.db
       .from("reviews")
       .update(fields)
       .eq("id", reviewId)
       .eq("user_id", userId)
-      .select("cemetery_id");
+      .select(MUTATION_RETURNING);
     if (error) throw writeError(error);
-    return data.length === 1 ? data[0].cemetery_id : null;
+    return affectedCemetery(data);
   }
 
-  /** Deletes only if `userId` owns the review. Returns the affected cemetery id, or null if nothing matched. */
-  async delete(reviewId: string, userId: string): Promise<string | null> {
+  /** Deletes only if `userId` owns the review. Returns its cemetery, or null if nothing matched. */
+  async delete(reviewId: string, userId: string): Promise<CemeteryRef | null> {
     const { data, error } = await this.db
       .from("reviews")
       .delete()
       .eq("id", reviewId)
       .eq("user_id", userId)
-      .select("cemetery_id");
+      .select(MUTATION_RETURNING);
     if (error) throw writeError(error);
-    return data.length === 1 ? data[0].cemetery_id : null;
+    return affectedCemetery(data);
   }
 }

@@ -47,6 +47,9 @@ export type ReviewFieldsInput = z.infer<typeof reviewFieldsSchema>;
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
 export type UpdateReviewInput = z.infer<typeof updateReviewSchema>;
 
+/** Hidden field asking the delete action to send the user back to the cemetery page (edit page). */
+export const RETURN_TO_CEMETERY_FIELD = "returnToCemetery";
+
 /** Reads the raw review fields from a submitted form (validation happens afterwards). */
 export function reviewFieldsFromFormData(formData: FormData) {
   return {

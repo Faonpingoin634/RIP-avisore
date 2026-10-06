@@ -5,9 +5,17 @@ import { useRef } from "react";
 import { deleteReviewAction } from "@/app/actions/reviews";
 import { FormAlert } from "@/components/ui/form";
 import { useServerForm } from "@/components/ui/use-server-form";
+import { RETURN_TO_CEMETERY_FIELD } from "@/lib/validation/review";
+
+type Props = {
+  reviewId: string;
+  cemeteryName: string;
+  /** After deletion, go to the cemetery page (needed where the current page stops existing, e.g. the edit page). */
+  returnToCemetery?: boolean;
+};
 
 /** "Supprimer" with an explicit confirmation dialog before calling the Server Action. */
-export default function DeleteReviewButton({ reviewId, cemeteryName }: { reviewId: string; cemeteryName: string }) {
+export default function DeleteReviewButton({ reviewId, cemeteryName, returnToCemetery = false }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const { state, pending, onSubmit } = useServerForm(deleteReviewAction);
 
@@ -41,6 +49,7 @@ export default function DeleteReviewButton({ reviewId, cemeteryName }: { reviewI
           className="mt-6 flex flex-wrap justify-end gap-2"
         >
           <input type="hidden" name="reviewId" value={reviewId} />
+          {returnToCemetery && <input type="hidden" name={RETURN_TO_CEMETERY_FIELD} value="1" />}
           <button
             type="button"
             onClick={() => dialog.current?.close()}

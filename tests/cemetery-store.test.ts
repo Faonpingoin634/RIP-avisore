@@ -117,4 +117,47 @@ describe("CemeteryStore", () => {
     expect(notifications).toBeGreaterThan(0);
     unsubscribe();
   });
+
+  it("keeps the same markers array while no marker changed (no needless map re-render)", async () => {
+    const { fetcher, pending } = controllableFetcher();
+    const store = new CemeteryStore(fetcher, 2);
+    store.showCells(["1_1"]);
+    pending.shift()?.resolve({ cemeteries: [marker(1)], degraded: false });
+    await flush();
+    const markers = store.getSnapshot().markers;
+
+    store.showCells(["1_1", "1_2"]); // loading toggles on…
+    expect(store.getSnapshot().loading).toBe(true);
+    expect(store.getSnapshot().markers).toBe(markers);
+    pending.shift()?.resolve({ cemeteries: [marker(1)], degraded: false }); // …same data again
+    await flush();
+    expect(store.getSnapshot().loading).toBe(false);
+    expect(store.getSnapshot().markers).toBe(markers);
+  });
+
+  it("publishes a new markers array when a rating changes", async () => {
+    const { fetcher, pending } = controllableFetcher();
+    const store = new CemeteryStore(fetcher, 2);
+    store.showCells(["1_1", "1_2"]);
+    pending.shift()?.resolve({ cemeteries: [marker(1)], degraded: false });
+    await flush();
+    const before = store.getSnapshot().markers;
+    pending.shift()?.resolve({ cemeteries: [marker(1, { reviewCount: 1, avgRating: 5 })], degraded: false });
+    await flush();
+    expect(store.getSnapshot().markers).not.toBe(before);
+    expect(store.getSnapshot().markers[0].avgRating).toBe(5);
+  });
+
+  it("does not notify subscribers when nothing changed", async () => {
+    const { fetcher, pending } = controllableFetcher();
+    const store = new CemeteryStore(fetcher, 2);
+    store.showCells(["1_1"]);
+    pending.shift()?.resolve({ cemeteries: [], degraded: false });
+    await flush();
+    let notifications = 0;
+    store.subscribe(() => notifications++);
+    store.showCells(["1_1"]); // already loaded: nothing to do
+    store.hideCells();
+    expect(notifications).toBe(0);
+  });
 });

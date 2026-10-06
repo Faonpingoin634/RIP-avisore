@@ -10,6 +10,7 @@ import { cemeteryPath } from "@/lib/types";
 import {
   createReviewSchema,
   deleteReviewSchema,
+  RETURN_TO_CEMETERY_FIELD,
   reviewFieldsFromFormData,
   updateReviewSchema,
 } from "@/lib/validation/review";
@@ -38,7 +39,7 @@ export async function createReviewAction(_previous: FormState, formData: FormDat
   });
   if (!parsed.success) return fail(INVALID_FORM, fieldErrorsFrom(parsed.error));
 
-  const { result } = await (await createReviewService()).create(user.id, parsed.data);
+  const result = await (await createReviewService()).create(user.id, parsed.data);
   if (result.ok) revalidateReviewPages();
   return result;
 }
@@ -53,13 +54,11 @@ export async function updateReviewAction(_previous: FormState, formData: FormDat
   });
   if (!parsed.success) return fail(INVALID_FORM, fieldErrorsFrom(parsed.error));
 
-  const service = await createReviewService();
-  const { result } = await service.update(user.id, parsed.data);
-  if (!result.ok) return result;
+  const { result, cemetery } = await (await createReviewService()).update(user.id, parsed.data);
+  if (!cemetery) return result;
 
   revalidateReviewPages();
-  const updated = await service.findOwned(parsed.data.reviewId, user.id);
-  redirect(updated ? `${cemeteryPath(updated.cemetery)}#mon-avis` : "/mes-contributions");
+  redirect(`${cemeteryPath(cemetery)}#mon-avis`);
 }
 
 export async function deleteReviewAction(_previous: FormState, formData: FormData): Promise<FormState> {
@@ -69,7 +68,11 @@ export async function deleteReviewAction(_previous: FormState, formData: FormDat
   const parsed = deleteReviewSchema.safeParse({ reviewId: formData.get("reviewId") });
   if (!parsed.success) return fail(INVALID_FORM, fieldErrorsFrom(parsed.error));
 
-  const { result } = await (await createReviewService()).delete(user.id, parsed.data.reviewId);
-  if (result.ok) revalidateReviewPages();
+  const { result, cemetery } = await (await createReviewService()).delete(user.id, parsed.data.reviewId);
+  if (!cemetery) return result;
+
+  revalidateReviewPages();
+  // The redirect target comes from the database, never from the form.
+  if (formData.get(RETURN_TO_CEMETERY_FIELD) === "1") redirect(cemeteryPath(cemetery));
   return result;
 }

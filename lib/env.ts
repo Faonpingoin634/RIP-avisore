@@ -14,7 +14,8 @@ class MissingEnvError extends Error {
   }
 }
 
-function required(name: string, value: string | undefined): string {
+/** The value, or an explicit French error naming the missing variable. */
+export function required(name: string, value: string | undefined): string {
   if (!value) throw new MissingEnvError(name);
   return value;
 }
