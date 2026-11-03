@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { CemeteryStore } from "@/lib/map/cemetery-store";
 import type { CemeteryMarker } from "@/lib/types";
@@ -20,12 +20,20 @@ function marker(osmId: number, overrides: Partial<CemeteryMarker> = {}): Cemeter
 
 type Deferred = { url: string; resolve: (body: unknown, status?: number) => void };
 
-/** Fetcher whose responses are released manually, to observe concurrency. */
-function controllableFetcher() {
+/**
+ * Fetcher whose responses are released manually, to observe concurrency.
+ * Database-only reads (`source=stored`) answer at once with `stored` and are not recorded.
+ */
+function controllableFetcher(stored: unknown = { cemeteries: [], degraded: false }) {
   const pending: Deferred[] = [];
   const calls: string[] = [];
   const fetcher = (url: string) =>
     new Promise<Response>((resolve) => {
+      if (url.endsWith("&source=stored")) {
+        const status = stored === null ? 500 : 200;
+        resolve(new Response(JSON.stringify(stored), { status }));
+        return;
+      }
       calls.push(url);
       pending.push({
         url,
@@ -79,9 +87,52 @@ describe("CemeteryStore", () => {
     expect(calls).toEqual(["/api/cemeteries?cell=1_1", "/api/cemeteries?cell=1_2"]);
   });
 
+  it("shows stored cemeteries while the full request is still running", async () => {
+    const { fetcher, pending } = controllableFetcher({ cemeteries: [marker(7)], degraded: false });
+    const store = new CemeteryStore(fetcher, 2);
+    store.showCells(["1_1"]);
+    await flush();
+    expect(store.getSnapshot().markers.map((m) => m.osmId)).toEqual([7]);
+    expect(store.getSnapshot().loading).toBe(true);
+    expect(pending).toHaveLength(1);
+  });
+
+  it("does not flag a failure when only the database read fails", async () => {
+    const { fetcher, pending } = controllableFetcher(null);
+    const store = new CemeteryStore(fetcher, 2);
+    store.showCells(["1_1"]);
+    await flush();
+    pending.shift()?.resolve({ cemeteries: [marker(1)], degraded: false });
+    await flush();
+    expect(store.getSnapshot().failed).toBe(false);
+    expect(store.getSnapshot().markers.map((m) => m.osmId)).toEqual([1]);
+  });
+
+  it("pauses Overpass requests after a degraded response, then resumes", async () => {
+    const { fetcher, pending, calls } = controllableFetcher();
+    const store = new CemeteryStore(fetcher, 1, 60_000);
+    store.showCells(["1_1", "1_2", "1_3"]);
+    expect(calls).toHaveLength(1);
+    pending.shift()?.resolve({ cemeteries: [], degraded: true });
+    await flush();
+    expect(calls).toHaveLength(1); // the queued cells do not wait 45 s each
+    expect(store.getSnapshot().loading).toBe(false);
+    expect(store.getSnapshot().degraded).toBe(true);
+
+    store.showCells(["2_1"]);
+    expect(calls).toHaveLength(1);
+    expect(store.getSnapshot().degraded).toBe(true);
+
+    const now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now + 60_001);
+    store.showCells(["2_1"]);
+    clock.mockRestore();
+    expect(calls).toEqual(["/api/cemeteries?cell=1_1", "/api/cemeteries?cell=2_1"]);
+  });
+
   it("flags degraded cells and retries them later", async () => {
     const { fetcher, pending, calls } = controllableFetcher();
-    const store = new CemeteryStore(fetcher, 2);
+    const store = new CemeteryStore(fetcher, 2, 0);
     store.showCells(["1_1"]);
     pending.shift()?.resolve({ cemeteries: [], degraded: true });
     await flush();

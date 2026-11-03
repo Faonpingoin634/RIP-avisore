@@ -43,6 +43,17 @@ export class CemeteryService {
     }
   }
 
+  /** Database only: answers at once, even when Overpass is down. */
+  async storedCemeteriesInCell(cell: Cell): Promise<CemeteriesResponse> {
+    const stored = await this.reader.findInBbox(cell.bbox);
+    return { cemeteries: stored.map((c) => toMarker(c, c)), degraded: false };
+  }
+
+  /** Keeps the free-tier database from being paused for inactivity. */
+  async keepDatabaseAwake(): Promise<void> {
+    await this.reader.ping();
+  }
+
   async reviewedCemeteries(): Promise<CemeteryMarker[]> {
     const stored = await this.reader.findReviewed(REVIEWED_LIMIT);
     return stored.map((c) => toMarker(c, c));

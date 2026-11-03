@@ -39,6 +39,11 @@ type Fetcher = (input: string) => Promise<Response>;
  * `useSyncExternalStore`). Cells are loaded at most once per map session,
  * with limited concurrency: public Overpass servers only accept a couple of
  * simultaneous queries per IP.
+ *
+ * Each cell is first read from the database, which answers at once, so known
+ * cemeteries never wait for Overpass. When Overpass is down a cell takes about
+ * 45 s to come back degraded: new Overpass requests are then paused for a while
+ * instead of making every remaining cell wait as long.
  */
 export class CemeteryStore {
   private readonly markers = new Map<string, CemeteryMarker>();
@@ -46,6 +51,8 @@ export class CemeteryStore {
   private readonly inFlight = new Set<string>();
   private readonly degradedCells = new Set<string>();
   private readonly failedCells = new Set<string>();
+  private readonly storedCells = new Set<string>();
+  private overpassPausedUntil = 0;
   private readonly listeners = new Set<Listener>();
   private queue: string[] = [];
   private visibleCells = new Set<string>();
@@ -61,6 +68,7 @@ export class CemeteryStore {
     // `stale-while-revalidate` (meant for the CDN) and shows a just-posted review late.
     private readonly fetcher: Fetcher = (input) => fetch(input, { cache: "no-cache" }),
     private readonly concurrency = 2,
+    private readonly overpassPauseMs = 60_000,
   ) {}
 
   subscribe = (listener: Listener): (() => void) => {
@@ -76,7 +84,10 @@ export class CemeteryStore {
    */
   showCells(cellIds: readonly string[]): void {
     this.visibleCells = new Set(cellIds);
-    this.queue = cellIds.filter((id) => !this.loadedCells.has(id) && !this.inFlight.has(id));
+    const missing = cellIds.filter((id) => !this.loadedCells.has(id));
+    for (const id of missing) void this.loadStoredCell(id);
+    this.queue = missing.filter((id) => !this.inFlight.has(id));
+    if (Date.now() < this.overpassPausedUntil) this.skipQueuedCells();
     this.emit();
     this.pump();
   }
@@ -109,6 +120,25 @@ export class CemeteryStore {
     this.emit();
   }
 
+  /** Queued cells stay unloaded: they are retried the next time they become visible. */
+  private skipQueuedCells(): void {
+    this.queue.forEach((id) => this.degradedCells.add(id));
+    this.queue = [];
+  }
+
+  private async loadStoredCell(cellId: string): Promise<void> {
+    if (this.storedCells.has(cellId)) return;
+    this.storedCells.add(cellId);
+    try {
+      const body = await this.request(`/api/cemeteries?cell=${encodeURIComponent(cellId)}&source=stored`);
+      this.merge(body.cemeteries);
+      this.emit();
+    } catch {
+      // No banner: the full request for this cell reports its own failure.
+      this.storedCells.delete(cellId);
+    }
+  }
+
   private pump(): void {
     while (this.inFlight.size < this.concurrency && this.queue.length > 0) {
       const cellId = this.queue.shift();
@@ -126,6 +156,8 @@ export class CemeteryStore {
       if (body.degraded) {
         // Not marked as loaded: it will be retried the next time it becomes visible.
         this.degradedCells.add(cellId);
+        this.overpassPausedUntil = Date.now() + this.overpassPauseMs;
+        this.skipQueuedCells();
       } else {
         this.degradedCells.delete(cellId);
         this.loadedCells.add(cellId);

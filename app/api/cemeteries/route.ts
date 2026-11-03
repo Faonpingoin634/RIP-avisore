@@ -9,7 +9,10 @@ export const maxDuration = 60;
 // response also carries live ratings, so the CDN keeps it only briefly.
 const CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=300";
 
-/** GET /api/cemeteries?cell=488_23 → cemeteries of one 0.1° cell. */
+/**
+ * GET /api/cemeteries?cell=488_23 → cemeteries of one 0.1° cell.
+ * With `&source=stored`: only those already in the database, without waiting for Overpass.
+ */
 export async function GET(request: NextRequest) {
   const cellId = request.nextUrl.searchParams.get("cell") ?? "";
   const cell = Cell.fromId(cellId);
@@ -19,7 +22,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const service = createCemeteryService();
-    const body = await service.cemeteriesInCell(cell);
+    const body =
+      request.nextUrl.searchParams.get("source") === "stored"
+        ? await service.storedCemeteriesInCell(cell)
+        : await service.cemeteriesInCell(cell);
     return NextResponse.json(body, {
       headers: { "Cache-Control": body.degraded ? "no-store" : CACHE_CONTROL },
     });

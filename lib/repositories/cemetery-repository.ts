@@ -67,6 +67,12 @@ const rowKey = (row: CemeteryRow) => cemeteryKey({ osmType: row.osm_type, osmId:
 export class CemeteryRepository {
   constructor(private readonly db: SupabaseClient<Database>) {}
 
+  /** Smallest possible query: enough to count as database activity. */
+  async ping(): Promise<void> {
+    const { error } = await this.db.from("cemeteries").select("id").limit(1);
+    if (error) throw new RepositoryError("Ping de la base", error);
+  }
+
   async findByOsm(osmType: OsmType, osmId: number): Promise<StoredCemetery | null> {
     const { data, error } = await this.db
       .from("cemeteries")

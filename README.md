@@ -115,7 +115,7 @@ tests/                  tests Vitest
 
 ### Chargement des cimetières par cellules et cache
 
-- Le monde est découpé en cellules de 0,1° × 0,1° (ex. `488_23` pour Paris). À partir du zoom 12, la carte demande les cellules visibles (16 au maximum) à `GET /api/cemeteries?cell=…`, avec un debounce de 400 ms et 2 requêtes simultanées au plus (limite des serveurs Overpass publics).
+- Le monde est découpé en cellules de 0,1° × 0,1° (ex. `488_23` pour Paris). À partir du zoom 12, la carte demande les cellules visibles (16 au maximum) à `GET /api/cemeteries?cell=…`, avec un debounce de 400 ms et 2 requêtes simultanées au plus (limite des serveurs Overpass publics). Chaque cellule est d'abord lue en base (`&source=stored`) : les cimetières connus s'affichent tout de suite, sans attendre Overpass.
 - En dessous du zoom 12, seuls les cimetières déjà notés s'affichent (`/api/cemeteries/reviewed`), avec le bandeau « Zoomez… ».
 - Côté serveur, la réponse d'Overpass est mise en cache **7 jours** (`fetch` + `revalidate`). La réponse complète, qui inclut les notes, n'est gardée que **60 s** par le CDN (`s-maxage=60`) pour qu'un nouvel avis apparaisse vite sur le marqueur. C'est un choix assumé par rapport aux 24 h prévues dans le cahier des charges.
 - **Fiche** : au premier affichage, le cimetière est redemandé à Overpass, on vérifie qu'il porte bien `landuse=cemetery` ou `amenity=grave_yard`, puis il est inséré par le client admin. Les données insérées ne viennent jamais du navigateur.
@@ -136,11 +136,13 @@ Les erreurs Postgres sont traduites en messages français. Le message brut n'est
 | Vitest 4.1 au lieu de la dernière version (5) | Vitest 5 exige Node 22, or le projet doit tourner sur Node 20. |
 | Cache CDN de 60 s au lieu de 24 h sur `/api/cemeteries` | La réponse contient les notes en direct (voir plus haut). |
 | `User-Agent` identifié sur Overpass | `overpass-api.de` répond `406` aux clients anonymes. |
+| Paramètre `source=stored` sur `/api/cemeteries` | Affiche les cimetières connus sans attendre les 45 s d'échec d'Overpass quand il est en panne. |
+| Route `/api/keep-alive` et tâche planifiée Vercel (`vercel.json`) | Une requête par jour pour éviter la mise en pause d'un projet Supabase gratuit inactif, qui rendrait la carte inutilisable. |
 
 ## Limites connues
 
 - **Dépendance aux serveurs publics Overpass et Nominatim.** Ils sont gratuits et partagés, donc parfois saturés (réponses 429 ou 504, lenteurs). La première ouverture d'une zone peut prendre plusieurs secondes.
-- **Mode dégradé** : si tous les serveurs Overpass échouent (dans un budget de 45 s), la carte affiche les cimetières déjà connus en base, avec le bandeau « Les données OpenStreetMap sont momentanément indisponibles ». Une fiche jamais consultée affiche alors une page « Réessayer ». Aucun écran d'erreur bloquant.
+- **Mode dégradé** : si tous les serveurs Overpass échouent (dans un budget de 45 s), la carte affiche les cimetières déjà connus en base, avec le bandeau « Les données OpenStreetMap sont momentanément indisponibles ». Après un échec, la carte ne réinterroge Overpass qu'au bout de 60 s, à la cellule suivante affichée. Une fiche jamais consultée affiche alors une page « Réessayer ». Aucun écran d'erreur bloquant.
 - La recherche de lieu se lance à la soumission du formulaire, sans autocomplétion, comme l'exige la politique d'usage de Nominatim.
 - Pas de réinitialisation de mot de passe (hors périmètre).
 
