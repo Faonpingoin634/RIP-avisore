@@ -25,7 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
 
         <main className="flex flex-1 flex-col">{children}</main>
 
-        <footer className="border-t border-mist bg-tomb px-4 py-3 text-center text-ash">
+        <footer className="border-t border-mist bg-crypt px-4 py-3 text-center text-ash">
           Données cartographiques ©{" "}
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">
             contributeurs OpenStreetMap

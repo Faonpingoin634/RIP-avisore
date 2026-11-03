@@ -16,7 +16,7 @@ type Props = {
 export default function ReviewCard({ review, heading, highlighted = false, actions }: Props) {
   return (
     <article
-      className={`rounded-xl border p-4 ${highlighted ? "border-candle bg-vault" : "border-mist bg-tomb"}`}
+      className={`rounded-xl border p-5 ${highlighted ? "border-candle/60 bg-tomb" : "border-mist bg-tomb"}`}
       aria-label={`Avis de ${review.username}`}
     >
       <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">

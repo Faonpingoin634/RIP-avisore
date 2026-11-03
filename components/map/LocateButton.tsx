@@ -66,9 +66,9 @@ export default function LocateButton({ map }: { map: LeafletMap | null }) {
         type="button"
         onClick={() => void locate()}
         disabled={locating || !map}
-        className="rounded-full border border-mist bg-tomb px-4 py-2 font-semibold text-bone shadow-xl hover:bg-vault disabled:cursor-wait disabled:opacity-60"
+        className="rounded-full border border-mist bg-tomb px-4 py-2 font-semibold text-bone shadow-xl transition-colors hover:bg-vault disabled:cursor-wait disabled:opacity-60"
       >
-        <span aria-hidden="true">📍 </span>
+        <span aria-hidden="true" className="grayscale">📍 </span>
         {locating ? "Localisation…" : "Me localiser"}
       </button>
     </div>

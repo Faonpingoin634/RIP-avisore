@@ -22,12 +22,12 @@ function iconFor(cemetery: CemeteryMarker): L.DivIcon {
   if (cached) return cached;
 
   const badge = rating
-    ? `<span class="absolute -right-3 -top-2 rounded-full border border-crypt bg-candle px-1.5 font-bold leading-5 text-crypt" style="font-size:0.8125rem">💀${escapeHtml(rating)}</span>`
+    ? `<span class="absolute -right-3 -top-2 rounded-full border border-crypt bg-candle px-1.5 font-bold leading-5 text-crypt" style="font-size:0.8125rem">${escapeHtml(rating)}</span>`
     : "";
-  const ring = rating ? "border-candle bg-vault" : "border-mist bg-tomb";
+  const ring = rating ? "border-candle bg-vault" : "border-ash/70 bg-tomb";
   const icon = L.divIcon({
     className: "cemetery-marker",
-    html: `<span class="relative flex h-9 w-9 items-center justify-center rounded-full border-2 ${ring} text-xl shadow-lg" aria-hidden="true">🪦${badge}</span>`,
+    html: `<span class="relative flex h-9 w-9 items-center justify-center rounded-full border-2 ${ring} text-xl shadow-lg" aria-hidden="true"><span class="grayscale">🪦</span>${badge}</span>`,
     iconSize: [36, 36],
     iconAnchor: [18, 18],
     popupAnchor: [0, -18],
@@ -48,7 +48,7 @@ function MarkerPopup({ cemetery }: { cemetery: CemeteryMarker }) {
       <p className="m-0 font-display text-lg font-bold text-bone">{cemeteryName(cemetery)}</p>
       {cemetery.reviewCount > 0 && cemetery.avgRating !== null ? (
         <p className="my-1 text-ash">
-          <span aria-hidden="true">💀 </span>
+          <span aria-hidden="true" className="grayscale">💀 </span>
           {cemetery.avgRating.toFixed(1)}/5 · {cemetery.reviewCount} avis
         </p>
       ) : (

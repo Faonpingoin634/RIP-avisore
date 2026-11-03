@@ -96,7 +96,7 @@ export default function ReviewForm(props: Props) {
             return (
               <label
                 key={vibe.value}
-                className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-candle ${
+                className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-candle ${
                   checked ? "border-candle bg-vault text-bone" : "border-mist text-bone"
                 } ${disabled ? "cursor-not-allowed opacity-50" : "hover:bg-vault"}`}
               >
@@ -109,7 +109,7 @@ export default function ReviewForm(props: Props) {
                   onChange={() => toggleVibe(vibe.value)}
                   className="h-4 w-4 accent-[var(--color-candle)]"
                 />
-                <span aria-hidden="true">{vibe.emoji}</span>
+                <span aria-hidden="true" className="grayscale">{vibe.emoji}</span>
                 {vibe.label}
               </label>
             );

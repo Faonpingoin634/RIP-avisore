@@ -6,6 +6,7 @@ import OwnReviewActions from "@/components/reviews/OwnReviewActions";
 import ReviewCard from "@/components/reviews/ReviewCard";
 import ReviewForm from "@/components/reviews/ReviewForm";
 import ReviewList from "@/components/reviews/ReviewList";
+import Ornament from "@/components/ui/Ornament";
 import RetryButton from "@/components/ui/RetryButton";
 import ScoreDisplay, { formatScore } from "@/components/ui/ScoreDisplay";
 import { buttonStyles } from "@/components/ui/styles";
@@ -43,14 +44,28 @@ function InfoLink({ href, children }: { href: string; children: React.ReactNode 
   );
 }
 
+function ScoreStat({ kind, label, value }: { kind: "rating" | "humidity"; label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-mist bg-crypt/50 p-4">
+      <p className="text-ash">{label}</p>
+      <p className="mt-1 font-display text-3xl font-bold">
+        {formatScore(value)}
+        <span className="font-sans text-base font-normal text-ash"> / 5</span>
+      </p>
+      <ScoreDisplay kind={kind} value={value} />
+    </div>
+  );
+}
+
 function CemeteryHeader({ cemetery }: { cemetery: StoredCemetery }) {
   const wiki = wikipediaUrl(cemetery.tags.wikipedia);
   const website = safeExternalUrl(cemetery.tags.website);
   const osmUrl = `https://www.openstreetmap.org/${cemetery.osmType}/${cemetery.osmId}`;
 
   return (
-    <header className="rounded-xl border border-mist bg-tomb p-6">
-      <h1 className="font-display text-3xl font-bold">{cemeteryName(cemetery)}</h1>
+    <header className="rounded-xl border border-mist bg-tomb p-6 sm:p-8">
+      <h1 className="font-display text-3xl font-bold tracking-wide sm:text-4xl">{cemeteryName(cemetery)}</h1>
+      <Ornament className="mt-4" />
 
       <dl className="mt-4 grid gap-x-6 gap-y-1 sm:grid-cols-[auto_1fr]">
         {cemetery.tags.religion && (
@@ -74,7 +89,7 @@ function CemeteryHeader({ cemetery }: { cemetery: StoredCemetery }) {
       <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
         <li>
           <Link href={mapUrlFor(cemetery.lat, cemetery.lon)} className="underline">
-            🗺️ Voir sur la carte
+            Voir sur la carte
           </Link>
         </li>
         <li>
@@ -92,29 +107,21 @@ function CemeteryHeader({ cemetery }: { cemetery: StoredCemetery }) {
         )}
       </ul>
 
-      <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-mist pt-4">
-        {cemetery.reviewCount > 0 && cemetery.avgRating !== null && cemetery.avgHumidity !== null ? (
-          <>
-            <div>
-              <p className="text-ash">Note moyenne</p>
-              <p className="flex items-center gap-2">
-                <ScoreDisplay kind="rating" value={cemetery.avgRating} size="lg" />
-                <span className="font-bold">{formatScore(cemetery.avgRating)}/5</span>
-              </p>
-            </div>
-            <div>
-              <p className="text-ash">Humidité moyenne</p>
-              <p className="flex items-center gap-2">
-                <ScoreDisplay kind="humidity" value={cemetery.avgHumidity} size="lg" />
-                <span className="font-bold">{formatScore(cemetery.avgHumidity)}/5</span>
-              </p>
-            </div>
-            <p className="font-semibold">{cemetery.reviewCount} avis</p>
-          </>
-        ) : (
-          <p className="text-ash">Pas encore noté.</p>
-        )}
-      </div>
+      {cemetery.reviewCount > 0 && cemetery.avgRating !== null && cemetery.avgHumidity !== null ? (
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <ScoreStat kind="rating" label="Note moyenne" value={cemetery.avgRating} />
+          <ScoreStat kind="humidity" label="Humidité moyenne" value={cemetery.avgHumidity} />
+          <div className="rounded-lg border border-mist bg-crypt/50 p-4">
+            <p className="text-ash">Contributions</p>
+            <p className="mt-1 font-display text-3xl font-bold">
+              {cemetery.reviewCount}
+              <span className="font-sans text-base font-normal text-ash"> avis</span>
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-6 rounded-lg border border-dashed border-mist p-4 text-center text-ash">Pas encore noté.</p>
+      )}
     </header>
   );
 }
@@ -128,7 +135,7 @@ export default async function CemeteryPage({ params }: Props) {
   if (lookup.status === "unavailable") {
     return (
       <div className="mx-auto w-full max-w-xl px-4 py-16 text-center">
-        <p className="text-5xl" aria-hidden="true">🌫️</p>
+        <p className="text-5xl grayscale" aria-hidden="true">🌫️</p>
         <h1 className="mt-4 font-display text-2xl font-bold">Le brouillard est trop épais</h1>
         <p className="mt-2 text-ash">
           Les serveurs OpenStreetMap ne répondent pas pour le moment, et ce cimetière n&apos;a encore jamais été
@@ -158,7 +165,11 @@ export default async function CemeteryPage({ params }: Props) {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8">
       <CemeteryHeader cemetery={cemetery} />
 
-      <section aria-labelledby="donner-avis" className="rounded-xl border border-mist bg-tomb p-6">
+      <section
+        aria-labelledby="donner-avis"
+        // Their own review is already a card: no card inside a card.
+        className={ownReview ? undefined : "rounded-xl border border-mist bg-tomb p-6 sm:p-8"}
+      >
         {!user && (
           <>
             <h2 id="donner-avis" className="font-display text-xl font-bold">

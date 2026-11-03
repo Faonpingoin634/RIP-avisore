@@ -58,7 +58,7 @@ export default function ScoreInput({ name, value, onChange, errors }: Props) {
                 htmlFor={id}
                 title={hints[score - 1]}
                 className={`block cursor-pointer rounded-md px-1.5 py-1 text-3xl transition peer-focus-visible:outline peer-focus-visible:outline-3 peer-focus-visible:outline-candle hover:scale-110 ${
-                  active ? "" : "opacity-30 grayscale"
+                  active ? "saturate-50" : "opacity-30 grayscale"
                 }`}
               >
                 <span aria-hidden="true">{icon}</span>

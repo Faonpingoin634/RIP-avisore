@@ -23,7 +23,7 @@ export default function ScoreDisplay({ kind, value, size = "md" }: { kind: Score
   return (
     <span role="img" aria-label={`${label} : ${formatScore(value)} sur ${MAX}`} className={`inline-flex gap-0.5 ${textSize}`}>
       {Array.from({ length: MAX }, (_, i) => (
-        <span key={i} aria-hidden="true" className={i < rounded ? "" : "opacity-25 grayscale"}>
+        <span key={i} aria-hidden="true" className={i < rounded ? "saturate-50" : "opacity-25 grayscale"}>
           {icon}
         </span>
       ))}

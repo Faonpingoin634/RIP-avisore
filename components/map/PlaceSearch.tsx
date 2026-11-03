@@ -67,7 +67,7 @@ export default function PlaceSearch({ map }: { map: LeafletMap | null }) {
         <button
           type="submit"
           disabled={loading || !map}
-          className="rounded-md bg-candle px-4 py-2 font-semibold text-crypt hover:bg-candle-dark disabled:cursor-wait disabled:opacity-60"
+          className="rounded-md bg-candle px-4 py-2 font-semibold text-crypt transition-colors hover:bg-candle-dark disabled:cursor-wait disabled:opacity-60"
         >
           {loading ? "Recherche…" : "Rechercher"}
         </button>

@@ -15,7 +15,7 @@ export default function AuthLinks() {
 
   return (
     <>
-      <Link href={`/connexion?next=${next}`} className="rounded-md px-3 py-1.5 text-bone no-underline hover:bg-vault">
+      <Link href={`/connexion?next=${next}`} className="rounded-md px-3 py-1.5 text-bone no-underline transition-colors hover:bg-vault">
         Connexion
       </Link>
       <Link href={`/inscription?next=${next}`} className={buttonStyles.primarySmall}>

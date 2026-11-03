@@ -18,8 +18,14 @@ import ViewportWatcher, { type ViewportMode } from "./ViewportWatcher";
 const ATTRIBUTION =
   '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">contributeurs OpenStreetMap</a>';
 
-function Banner({ children, tone = "info" }: { children: React.ReactNode; tone?: "info" | "warning" }) {
-  const color = tone === "warning" ? "border-blood/60 text-blood" : "border-mist text-bone";
+const BANNER_TONES = {
+  info: "border-mist text-bone",
+  warning: "border-candle/50 text-candle",
+  error: "border-blood/60 text-blood",
+} as const;
+
+function Banner({ children, tone = "info" }: { children: React.ReactNode; tone?: keyof typeof BANNER_TONES }) {
+  const color = BANNER_TONES[tone];
   return (
     <p role="status" className={`pointer-events-auto rounded-md border bg-tomb/95 px-3 py-2 shadow-xl ${color}`}>
       {children}
@@ -58,12 +64,12 @@ export default function CemeteryMap({ initialView }: { initialView: MapView }) {
       {/* Overlays: outside Leaflet's DOM so they do not capture map gestures. */}
       <div className="pointer-events-none absolute inset-x-3 top-3 z-[1000] mx-auto flex max-w-xl flex-col gap-2">
         <PlaceSearch map={map} />
-        {mode === "zoomed-out" && <Banner>🔍 Zoomez pour voir tous les cimetières.</Banner>}
+        {mode === "zoomed-out" && <Banner>Zoomez pour voir tous les cimetières.</Banner>}
         {snapshot.degraded && (
           <Banner tone="warning">Les données OpenStreetMap sont momentanément indisponibles.</Banner>
         )}
         {snapshot.failed && (
-          <Banner tone="warning">Impossible de charger certains cimetières. Vérifiez votre connexion.</Banner>
+          <Banner tone="error">Impossible de charger certains cimetières. Vérifiez votre connexion.</Banner>
         )}
       </div>
 
@@ -74,7 +80,7 @@ export default function CemeteryMap({ initialView }: { initialView: MapView }) {
       {snapshot.loading && (
         <div className="pointer-events-none absolute bottom-8 left-1/2 z-[1000] -translate-x-1/2">
           <p role="status" className="rounded-full border border-mist bg-tomb/95 px-3 py-1 text-ash shadow-xl">
-            <span aria-hidden="true" className="mr-1 inline-block animate-spin">⏳</span>
+            <span aria-hidden="true" className="mr-1 inline-block animate-spin grayscale">⏳</span>
             Chargement des cimetières…
           </p>
         </div>
