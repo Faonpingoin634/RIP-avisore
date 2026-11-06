@@ -3,11 +3,22 @@ import { z } from "zod";
 import type { BoundingBox } from "@/lib/osm/cells";
 import { cemeteryKey, OSM_TYPES, pickCemeteryTags, type OsmCemetery, type OsmType } from "@/lib/types";
 
+/** Free public instances. overpass.kumi.systems was renamed private.coffee, so VK Maps replaces it. */
 export const OVERPASS_ENDPOINTS: readonly string[] = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
+
+/**
+ * Overpass.ch (free tier, API key) goes first when a key is configured: public
+ * instances are often saturated. The key sits in the URL path, so error causes
+ * only ever mention the host.
+ */
+export function overpassEndpoints(overpassChKey: string | undefined): readonly string[] {
+  if (!overpassChKey) return OVERPASS_ENDPOINTS;
+  return [`https://api.overpass.ch/v1/${encodeURIComponent(overpassChKey)}/interpreter`, ...OVERPASS_ENDPOINTS];
+}
 
 const REQUEST_TIMEOUT_MS = 20_000;
 

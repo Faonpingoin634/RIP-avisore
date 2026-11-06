@@ -1,6 +1,6 @@
 import "server-only";
 
-import { OverpassClient } from "@/lib/osm/overpass";
+import { OverpassClient, overpassEndpoints } from "@/lib/osm/overpass";
 import { CemeteryRepository } from "@/lib/repositories/cemetery-repository";
 import { ReviewRepository } from "@/lib/repositories/review-repository";
 import { serverEnv } from "@/lib/server-env";
@@ -22,7 +22,7 @@ export function osmUserAgent(): string {
 }
 
 export function createOverpassClient(): OverpassClient {
-  return new OverpassClient({ userAgent: osmUserAgent() });
+  return new OverpassClient({ endpoints: overpassEndpoints(serverEnv.overpassChApiKey()), userAgent: osmUserAgent() });
 }
 
 /** Map data: public, session-less reads. */

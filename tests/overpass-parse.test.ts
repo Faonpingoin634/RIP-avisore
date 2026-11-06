@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  OVERPASS_ENDPOINTS,
   OverpassClient,
+  overpassEndpoints,
   OverpassQuery,
   OverpassResponseError,
   OverpassUnavailableError,
@@ -114,6 +116,14 @@ describe("OverpassClient", () => {
     };
     return { fetchImpl, calls };
   }
+
+  it("puts Overpass.ch first only when a key is configured", () => {
+    expect(overpassEndpoints(undefined)).toEqual(OVERPASS_ENDPOINTS);
+    expect(overpassEndpoints("abc/123")).toEqual([
+      "https://api.overpass.ch/v1/abc%2F123/interpreter",
+      ...OVERPASS_ENDPOINTS,
+    ]);
+  });
 
   const endpoints = ["https://a.example/api", "https://b.example/api", "https://c.example/api"];
 

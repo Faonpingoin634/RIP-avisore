@@ -54,6 +54,7 @@ Le cœur du projet est un **CRUD complet et sécurisé côté serveur** sur les 
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | clé **Publishable** (ou *anon* dans l'onglet *Legacy API keys*) |
    | `SUPABASE_SERVICE_ROLE_KEY` | clé **Secret** (ou *service_role*). ⚠️ Serveur uniquement, ne jamais la commiter |
    | `NOMINATIM_CONTACT_EMAIL` | votre email : les politiques d'usage d'OpenStreetMap exigent un contact |
+   | `OVERPASS_CH_API_KEY` | *optionnelle* : clé gratuite créée sur https://overpass.ch/signup. Sans elle, l'application utilise les serveurs Overpass publics, souvent saturés. ⚠️ Secrète, ne jamais la commiter |
 
 7. Lancer l'application :
    ```bash
@@ -64,7 +65,7 @@ Le cœur du projet est un **CRUD complet et sécurisé côté serveur** sur les 
 ## Déploiement sur Vercel
 
 1. Sur https://vercel.com, cliquer sur **Add New… → Project** et importer le dépôt GitHub. Le preset **Next.js** est détecté automatiquement.
-2. Dans **Environment Variables**, ajouter les 4 variables de `.env.local`, puis cliquer sur **Deploy**.
+2. Dans **Environment Variables**, ajouter les variables de `.env.local` (4 obligatoires, plus `OVERPASS_CH_API_KEY` si vous en avez une), puis cliquer sur **Deploy**.
 3. Dans Supabase, ouvrir **Authentication → URL Configuration** :
    - *Site URL* : l'URL Vercel (ex. `https://rip-avisore.vercel.app`) ;
    - *Redirect URLs* : `http://localhost:3000/**` et `https://<url-vercel>/**`.
@@ -138,6 +139,8 @@ Les erreurs Postgres sont traduites en messages français. Le message brut n'est
 | `User-Agent` identifié sur Overpass | `overpass-api.de` répond `406` aux clients anonymes. |
 | Paramètre `source=stored` sur `/api/cemeteries` | Affiche les cimetières connus sans attendre les 45 s d'échec d'Overpass quand il est en panne. |
 | Courte vidéo d'introduction (`public/rip-advisor-loader.mp4`) | Demandée pendant le développement. Jouée une fois par session, peut être passée, jamais jouée si l'appareil demande moins d'animations. |
+| `maps.mail.ru` au lieu de `overpass.kumi.systems` dans les serveurs de secours | `kumi.systems` a été renommé `private.coffee`, déjà dans la liste : c'était un doublon. |
+| Variable optionnelle `OVERPASS_CH_API_KEY` (serveur Overpass.ch avec clé gratuite, essayé en premier) | En novembre 2026, tous les serveurs Overpass publics sont restés saturés plusieurs jours. |
 | Route `/api/keep-alive` et tâche planifiée Vercel (`vercel.json`) | Une requête par jour pour éviter la mise en pause d'un projet Supabase gratuit inactif, qui rendrait la carte inutilisable. |
 
 ## Limites connues
