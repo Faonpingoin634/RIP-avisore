@@ -81,29 +81,37 @@ html[data-intro="off"] .intro-splash {
   }
 }
 
-/* ---------- Leaflet overrides ---------- */
+/*
+ * ---------- Leaflet overrides ----------
+ * leaflet.css is loaded after this file (it is imported by the map chunk), so
+ * every override is one class more specific than Leaflet's own rule.
+ */
 .leaflet-container {
   font: inherit;
   font-size: 1rem;
   background: var(--color-crypt);
 }
 
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
+.leaflet-container .leaflet-popup-content-wrapper,
+.leaflet-container .leaflet-popup-tip {
   background: var(--color-tomb);
   color: var(--color-bone);
   border: 1px solid var(--color-mist);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
 }
 
-.leaflet-popup-content {
+.leaflet-container .leaflet-popup-content {
   font-size: 1rem;
   line-height: 1.5;
   margin: 14px 18px;
 }
 
-.leaflet-container a.leaflet-popup-close-button {
+.leaflet-container .leaflet-popup a.leaflet-popup-close-button {
   color: var(--color-ash);
+}
+
+.leaflet-container .leaflet-popup a.leaflet-popup-close-button:hover {
+  color: var(--color-bone);
 }
 
 .leaflet-control-attribution {
@@ -137,11 +145,12 @@ html[data-intro="off"] .intro-splash {
   color: var(--color-bone);
 }
 
-.leaflet-container .leaflet-bar a:hover {
+.leaflet-container .leaflet-bar a:hover,
+.leaflet-container .leaflet-bar a:focus {
   background: var(--color-vault);
 }
 
-.leaflet-container a {
+.leaflet-container .leaflet-pane a {
   color: var(--color-candle);
 }
 
