@@ -57,6 +57,30 @@
   }
 }
 
+/* ---------- Intro video (components/layout/IntroSplash.tsx) ---------- */
+html[data-intro="off"] .intro-splash {
+  display: none;
+}
+
+/* Safety net: hides itself after the 2.6 s video even without JavaScript or autoplay. */
+.intro-splash {
+  animation: intro-auto-hide 0.4s ease 4s forwards;
+  transition: opacity 0.4s ease;
+}
+
+.intro-splash[data-leaving] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes intro-auto-hide {
+  to {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
 /* ---------- Leaflet overrides ---------- */
 .leaflet-container {
   font: inherit;

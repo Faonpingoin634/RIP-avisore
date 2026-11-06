@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Cinzel, Inter } from "next/font/google";
 
+import IntroSplash, { INTRO_SCRIPT } from "@/components/layout/IntroSplash";
 import SiteHeader from "@/components/layout/SiteHeader";
 import "./globals.css";
 
@@ -19,8 +20,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="fr" className={`${title.variable} ${body.variable} h-full antialiased`}>
+    // suppressHydrationWarning: INTRO_SCRIPT may add data-intro to <html> before React hydrates.
+    <html lang="fr" className={`${title.variable} ${body.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: INTRO_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col font-sans">
+        <IntroSplash />
         <SiteHeader />
 
         <main className="flex flex-1 flex-col">{children}</main>

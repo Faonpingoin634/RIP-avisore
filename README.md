@@ -137,6 +137,7 @@ Les erreurs Postgres sont traduites en messages français. Le message brut n'est
 | Cache CDN de 60 s au lieu de 24 h sur `/api/cemeteries` | La réponse contient les notes en direct (voir plus haut). |
 | `User-Agent` identifié sur Overpass | `overpass-api.de` répond `406` aux clients anonymes. |
 | Paramètre `source=stored` sur `/api/cemeteries` | Affiche les cimetières connus sans attendre les 45 s d'échec d'Overpass quand il est en panne. |
+| Courte vidéo d'introduction (`public/rip-advisor-loader.mp4`) | Demandée pendant le développement. Jouée une fois par session, peut être passée, jamais jouée si l'appareil demande moins d'animations. |
 | Route `/api/keep-alive` et tâche planifiée Vercel (`vercel.json`) | Une requête par jour pour éviter la mise en pause d'un projet Supabase gratuit inactif, qui rendrait la carte inutilisable. |
 
 ## Limites connues
